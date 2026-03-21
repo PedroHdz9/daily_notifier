@@ -25,11 +25,37 @@ export default function App() {
 
     const [activeAlert, setActiveAlert] = useState(null);
 
+    const [permission, setPermission] = useState('default');
+
     useEffect(() => {
-        if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-            Notification.requestPermission();
+        if ('Notification' in window) {
+            setPermission(Notification.permission);
         }
     }, []);
+
+    const requestPermission = () => {
+        if (!('Notification' in window)) {
+            alert('Este navegador no soporta notificaciones o no estás en una conexión segura (HTTPS).');
+            return;
+        }
+        Notification.requestPermission().then(perm => {
+            setPermission(perm);
+            if (perm === 'granted') {
+                if ('vibrate' in navigator) navigator.vibrate(200);
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.ready.then(reg => {
+                        reg.showNotification('¡Notificaciones activadas!', {
+                            body: 'Así se verán tus recordatorios.',
+                            icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827370.png',
+                            vibrate: [200, 100, 200]
+                        });
+                    });
+                } else {
+                    new Notification('¡Notificaciones activadas!');
+                }
+            }
+        });
+    };
 
     // Reloj interno y comprobador de recordatorios
     useEffect(() => {
@@ -70,22 +96,30 @@ export default function App() {
     };
 
     const triggerNotification = (reminder) => {
-        if ('serviceWorker' in navigator && 'Notification' in window && Notification.permission === 'granted') {
-            // Intentar lanzar la notificación desde el Service Worker (formato nativo soportado en móviles como Android / iOS Web Push)
-            navigator.serviceWorker.ready.then(registration => {
-                registration.showNotification('¡Recordatorio!', {
-                    body: reminder.title,
+        // Forzar vibración web general si el navegador lo permite
+        if ('vibrate' in navigator) {
+            navigator.vibrate([300, 100, 300, 100, 300]);
+        }
+
+        if ('Notification' in window && Notification.permission === 'granted') {
+            if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                // Intentar lanzar la notificación desde el Service Worker (formato nativo)
+                navigator.serviceWorker.ready.then(registration => {
+                    registration.showNotification(reminder.title, {
+                        body: '¡Es la hora de tu recordatorio!',
+                        icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827370.png',
+                        vibrate: [300, 100, 300, 100, 300],
+                        requireInteraction: true
+                    });
+                });
+            } else {
+                // Fallback original
+                new Notification(reminder.title, {
+                    body: '¡Es la hora de tu recordatorio!',
                     icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827370.png',
-                    vibrate: [200, 100, 200],
                     requireInteraction: true
                 });
-            });
-        } else if ('Notification' in window && Notification.permission === 'granted') {
-            // Fallback original para escritorios sin SW listo
-            new Notification('¡Recordatorio!', {
-                body: reminder.title,
-                icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827370.png'
-            });
+            }
         }
 
         setActiveAlert(reminder);
@@ -140,6 +174,21 @@ export default function App() {
                         <span>{reminders.filter(r => r.isActive).length} activos hoy</span>
                     </p>
                 </div>
+
+                {permission !== 'granted' && (
+                    <div className="mx-4 mt-2 mb-2 p-3 bg-amber-100 border border-amber-200 rounded-xl flex flex-col items-center justify-center text-center space-y-3 shadow-sm z-20 relative">
+                        <p className="text-amber-800 text-xs font-semibold">
+                            ⚠️ Para que el teléfono suene/vibre necesitas permisos.
+                        </p>
+                        <button 
+                            onClick={requestPermission}
+                            className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-sm font-bold py-2 px-6 rounded-lg transition-transform transform active:scale-95 shadow-md flex items-center space-x-2"
+                        >
+                            <BellRing size={16} />
+                            <span>Activar Notificaciones y Sonido</span>
+                        </button>
+                    </div>
+                )}
 
                 <div className="flex-1 overflow-y-auto px-4 pb-24 space-y-3 custom-scrollbar">
                     {reminders.length === 0 ? (
