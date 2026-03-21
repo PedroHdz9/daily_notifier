@@ -1,0 +1,22 @@
+{
+    "short_name": "Recordatorios",
+    "name": "Recordatorios Diarios App",
+    "description": "Una aplicación sencilla para gestionar tus recordatorios diarios.",
+    "icons": [
+        {
+            "src": "https://cdn-icons-png.flaticon.com/512/1827/1827370.png",
+            "type": "image/png",
+            "sizes": "192x192"
+        },
+        {
+            "src": "https://cdn-icons-png.flaticon.com/512/1827/1827370.png",
+            "type": "image/png",
+            "sizes": "512x512"
+        }
+    ],
+    "start_url": "/",
+    "display": "standalone",
+    "theme_color": "#2563eb",
+    "background_color": "#e5e7eb",
+    "orientation": "portrait"
+}
