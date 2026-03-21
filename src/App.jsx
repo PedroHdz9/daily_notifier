@@ -13,22 +13,18 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-    // Estado para los recordatorios
     const [reminders, setReminders] = useState([
         { id: 1, title: 'Beber agua', time: '10:30', isActive: true, lastTriggered: null },
         { id: 2, title: 'Reunión de equipo', time: '16:00', isActive: false, lastTriggered: null }
     ]);
 
-    // Estados de la interfaz
     const [isAdding, setIsAdding] = useState(false);
     const [newTitle, setNewTitle] = useState('');
     const [newTime, setNewTime] = useState('');
     const [currentTime, setCurrentTime] = useState(new Date());
 
-    // Estado para la notificación in-app
     const [activeAlert, setActiveAlert] = useState(null);
 
-    // Solicitar permiso de notificaciones al navegador al iniciar
     useEffect(() => {
         if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
             Notification.requestPermission();
@@ -74,18 +70,26 @@ export default function App() {
     };
 
     const triggerNotification = (reminder) => {
-        // 1. Intentar notificación nativa del dispositivo/navegador
-        if ('Notification' in window && Notification.permission === 'granted') {
+        if ('serviceWorker' in navigator && 'Notification' in window && Notification.permission === 'granted') {
+            // Intentar lanzar la notificación desde el Service Worker (formato nativo soportado en móviles como Android / iOS Web Push)
+            navigator.serviceWorker.ready.then(registration => {
+                registration.showNotification('¡Recordatorio!', {
+                    body: reminder.title,
+                    icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827370.png',
+                    vibrate: [200, 100, 200],
+                    requireInteraction: true
+                });
+            });
+        } else if ('Notification' in window && Notification.permission === 'granted') {
+            // Fallback original para escritorios sin SW listo
             new Notification('¡Recordatorio!', {
                 body: reminder.title,
-                icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827370.png' // Icono genérico de campana
+                icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827370.png'
             });
         }
 
-        // 2. Mostrar alerta visual en la pantalla del "móvil"
         setActiveAlert(reminder);
 
-        // Ocultar la alerta in-app después de 10 segundos
         setTimeout(() => {
             setActiveAlert(null);
         }, 10000);
@@ -122,10 +126,8 @@ export default function App() {
     return (
         <div className="flex items-center justify-center min-h-[100dvh] sm:bg-gradient-to-br sm:from-indigo-500 sm:via-purple-500 sm:to-pink-500 bg-slate-50 sm:p-4 font-sans max-w-[100vw] overflow-hidden">
 
-            {/* Contenedor Principal (Pantalla Completa en Móvil, Componente Flotante en PC) */}
             <div className="relative w-full h-[100dvh] sm:h-[90vh] sm:max-w-[420px] bg-gradient-to-b from-slate-50 to-white sm:rounded-[2.5rem] sm:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.5)] sm:border-[10px] sm:border-gray-900 overflow-hidden flex flex-col">
 
-                {/* Cabecera de la App - Margen superior extra para status bar real en móviles (PWA) */}
                 <div className="px-6 pt-14 sm:pt-8 pb-6 relative">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-blue-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
                     <div className="absolute top-0 left-0 w-32 h-32 bg-purple-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
@@ -139,7 +141,6 @@ export default function App() {
                     </p>
                 </div>
 
-                {/* Lista de Recordatorios */}
                 <div className="flex-1 overflow-y-auto px-4 pb-24 space-y-3 custom-scrollbar">
                     {reminders.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-4">
@@ -151,14 +152,14 @@ export default function App() {
                             <div
                                 key={reminder.id}
                                 className={`group flex items-center justify-between p-4 rounded-2xl transition-all duration-300 shadow-sm hover:shadow-md transform hover:-translate-y-1 ${reminder.isActive
-                                        ? 'bg-white border border-blue-100 shadow-[0_4px_20px_-4px_rgba(59,130,246,0.15)]'
-                                        : 'bg-gray-50/80 border border-gray-100 opacity-75'
+                                    ? 'bg-white border border-blue-100 shadow-[0_4px_20px_-4px_rgba(59,130,246,0.15)]'
+                                    : 'bg-gray-50/80 border border-gray-100 opacity-75'
                                     }`}
                             >
                                 <div className="flex items-center space-x-4">
                                     <div className={`p-3 rounded-2xl shadow-inner transition-colors duration-300 ${reminder.isActive
-                                            ? 'bg-gradient-to-tr from-blue-500 to-indigo-400 text-white shadow-blue-500/30'
-                                            : 'bg-gray-200 text-gray-400'
+                                        ? 'bg-gradient-to-tr from-blue-500 to-indigo-400 text-white shadow-blue-500/30'
+                                        : 'bg-gray-200 text-gray-400'
                                         }`}>
                                         <Clock size={20} strokeWidth={reminder.isActive ? 2.5 : 2} />
                                     </div>
@@ -175,7 +176,6 @@ export default function App() {
                                 </div>
 
                                 <div className="flex flex-col items-end space-y-2">
-                                    {/* Interruptor (Toggle) */}
                                     <button
                                         onClick={() => toggleReminder(reminder.id)}
                                         className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 ease-in-out shadow-inner ${reminder.isActive ? 'bg-indigo-500' : 'bg-gray-300'
@@ -185,12 +185,11 @@ export default function App() {
                                             }`} />
                                     </button>
 
-                                    {/* Botón Borrar */}
                                     <button
                                         onClick={() => deleteReminder(reminder.id)}
                                         className={`p-1.5 rounded-lg transition-all duration-300 ${reminder.isActive
-                                                ? 'text-gray-300 hover:text-red-500 hover:bg-red-50'
-                                                : 'text-gray-300 hover:text-red-400 hover:bg-red-50/50'
+                                            ? 'text-gray-300 hover:text-red-500 hover:bg-red-50'
+                                            : 'text-gray-300 hover:text-red-400 hover:bg-red-50/50'
                                             }`}
                                         title="Eliminar recordatorio"
                                     >
@@ -202,7 +201,6 @@ export default function App() {
                     )}
                 </div>
 
-                {/* Botón Flotante (FAB) */}
                 <button
                     onClick={() => setIsAdding(true)}
                     className="absolute bottom-8 right-6 w-14 h-14 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full shadow-[0_10px_25px_rgba(79,70,229,0.5)] flex items-center justify-center hover:shadow-[0_15px_35px_rgba(79,70,229,0.6)] hover:scale-110 transition-all duration-300 transform active:scale-95 z-40 group"
@@ -210,7 +208,6 @@ export default function App() {
                     <Plus size={28} className="group-hover:rotate-90 transition-transform duration-300" />
                 </button>
 
-                {/* Modal Inferior para Añadir (Bottom Sheet) */}
                 <div className={`absolute inset-x-0 bottom-0 bg-white/95 backdrop-blur-md rounded-t-[2.5rem] shadow-[0_-20px_40px_rgba(0,0,0,0.1)] border-t border-white shadow-xl transition-transform duration-500 ease-out z-50 ${isAdding ? 'translate-y-0' : 'translate-y-full'}`}>
                     <div className="p-7">
                         <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6"></div>
@@ -256,7 +253,6 @@ export default function App() {
                     </div>
                 </div>
 
-                {/* Overlay oscuro cuando el modal está abierto */}
                 {isAdding && (
                     <div
                         className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] z-40 transition-all duration-500"
@@ -264,7 +260,6 @@ export default function App() {
                     />
                 )}
 
-                {/* Notificación In-App (Se muestra cuando llega la hora) */}
                 {activeAlert && (
                     <div className="absolute top-12 left-4 right-4 bg-gray-900 text-white p-4 rounded-2xl shadow-2xl z-50 flex items-start space-x-4 animate-[slideDown_0.3s_ease-out]">
                         <div className="bg-blue-500 p-2 rounded-full animate-bounce">
