@@ -11,6 +11,8 @@ import {
     Check,
     BellRing
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { LocalNotifications } from '@capacitor/local-notifications';
 
 export default function App() {
     const [reminders, setReminders] = useState([
@@ -28,34 +30,106 @@ export default function App() {
     const [permission, setPermission] = useState('default');
 
     useEffect(() => {
-        if ('Notification' in window) {
-            setPermission(Notification.permission);
-        }
-    }, []);
-
-    const requestPermission = () => {
-        if (!('Notification' in window)) {
-            alert('Este navegador no soporta notificaciones o no estás en una conexión segura (HTTPS).');
-            return;
-        }
-        Notification.requestPermission().then(perm => {
-            setPermission(perm);
-            if (perm === 'granted') {
-                if ('vibrate' in navigator) navigator.vibrate(200);
-                if ('serviceWorker' in navigator) {
-                    navigator.serviceWorker.ready.then(reg => {
-                        reg.showNotification('¡Notificaciones activadas!', {
-                            body: 'Así se verán tus recordatorios.',
-                            icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827370.png',
-                            vibrate: [200, 100, 200]
-                        });
-                    });
+        const checkPermissions = async () => {
+            if (Capacitor.isNativePlatform()) {
+                const permStatus = await LocalNotifications.checkPermissions();
+                if (permStatus.display === 'granted') {
+                    setPermission('granted');
                 } else {
-                    new Notification('¡Notificaciones activadas!');
+                    setPermission('default');
+                }
+            } else {
+                if ('Notification' in window) {
+                    setPermission(Notification.permission);
                 }
             }
-        });
+        };
+        checkPermissions();
+    }, []);
+
+    const requestPermission = async () => {
+        if (Capacitor.isNativePlatform()) {
+            const permStatus = await LocalNotifications.requestPermissions();
+            setPermission(permStatus.display === 'granted' ? 'granted' : 'denied');
+            if (permStatus.display === 'granted') {
+                LocalNotifications.schedule({
+                    notifications: [
+                        {
+                            title: '¡Notificaciones activadas!',
+                            body: 'Así se verán tus recordatorios.',
+                            id: 99999,
+                            schedule: { at: new Date(Date.now() + 1000) }
+                        }
+                    ]
+                });
+            }
+        } else {
+            if (!('Notification' in window)) {
+                alert('Este navegador no soporta notificaciones o no estás en una conexión segura (HTTPS).');
+                return;
+            }
+            Notification.requestPermission().then(perm => {
+                setPermission(perm);
+                if (perm === 'granted') {
+                    if ('vibrate' in navigator) navigator.vibrate(200);
+                    if ('serviceWorker' in navigator) {
+                        navigator.serviceWorker.ready.then(reg => {
+                            reg.showNotification('¡Notificaciones activadas!', {
+                                body: 'Así se verán tus recordatorios.',
+                                icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827370.png',
+                                vibrate: [200, 100, 200]
+                            });
+                        });
+                    } else {
+                        new Notification('¡Notificaciones activadas!');
+                    }
+                }
+            });
+        }
     };
+
+    // Sincronizador de notificaciones nativas
+    useEffect(() => {
+        if (Capacitor.isNativePlatform()) {
+            const syncNativeNotifications = async () => {
+                const pending = await LocalNotifications.getPending();
+                if (pending.notifications.length > 0) {
+                    await LocalNotifications.cancel(pending);
+                }
+                
+                const activeReminders = reminders.filter(r => r.isActive);
+                if (activeReminders.length === 0) return;
+
+                const notifications = activeReminders.map(reminder => {
+                    const [hours, minutes] = reminder.time.split(':');
+                    let scheduleDate = new Date();
+                    scheduleDate.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+
+                    const now = new Date();
+                    const currentHours = now.getHours().toString().padStart(2, '0');
+                    const currentMinutes = now.getMinutes().toString().padStart(2, '0');
+                    const currentTimeString = `${currentHours}:${currentMinutes}`;
+                    const todayString = now.toISOString().slice(0, 10);
+                    
+                    if (scheduleDate <= now || (reminder.time === currentTimeString && reminder.lastTriggered === todayString)) {
+                        scheduleDate.setDate(scheduleDate.getDate() + 1);
+                    }
+
+                    return {
+                        title: 'Recordatorio',
+                        body: reminder.title,
+                        id: reminder.id,
+                        schedule: { at: scheduleDate },
+                        smallIcon: 'ic_stat_icon_config_sample'
+                    };
+                });
+
+                await LocalNotifications.schedule({ notifications });
+            };
+            
+            syncNativeNotifications();
+        }
+    }, [reminders]);
 
     // Reloj interno y comprobador de recordatorios
     useEffect(() => {
@@ -101,7 +175,7 @@ export default function App() {
             navigator.vibrate([300, 100, 300, 100, 300]);
         }
 
-        if ('Notification' in window && Notification.permission === 'granted') {
+        if (!Capacitor.isNativePlatform() && 'Notification' in window && Notification.permission === 'granted') {
             if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
                 // Intentar lanzar la notificación desde el Service Worker (formato nativo)
                 navigator.serviceWorker.ready.then(registration => {
@@ -180,7 +254,7 @@ export default function App() {
                         <p className="text-amber-800 text-xs font-semibold">
                             ⚠️ Para que el teléfono suene/vibre necesitas permisos.
                         </p>
-                        <button 
+                        <button
                             onClick={requestPermission}
                             className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-sm font-bold py-2 px-6 rounded-lg transition-transform transform active:scale-95 shadow-md flex items-center space-x-2"
                         >
